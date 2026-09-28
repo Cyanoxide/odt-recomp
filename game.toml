@@ -1,0 +1,54 @@
+# Autofilled by tools/new_project_layout/probe_disc.py from your legal dump.
+# Review before shipping. Runtime quirks / overlay seeds still need hand work.
+
+[game]
+name = "ODT-"
+id = "SLUS-00698"
+players = 1
+exe = "disc/SLUS_006.98"
+disc = "/Users/jamie/Desktop/O.D.T. (USA)/O.D.T. (USA).cue"
+load_address = "0x80010000"
+entry_pc = "0x800119E4"
+text_size = "0x00096000"
+stack_base = "0x801FFFF0"
+
+# Digests are for data Track 01 (first BINARY FILE / TRACK 01).
+[prepare_disc]
+out_dir = "disc"
+bin_name = "O.D.T. (USA) (Track 1).bin"
+cue_name = "O.D.T. (USA).cue"
+boot_exe = "SLUS_006.98"
+known_sizes = [568635984]
+known_md5 = [
+  "f63ba68b659e16d9a01cd87af1bfca81",
+]
+known_sha1 = [
+  "e7f61463fc39d317ba5eb67b7a1fc7069822ec42",
+]
+known_crc32 = [
+  "7eb6560a",
+]
+
+[recompiler]
+seeds = "seeds/ghidra_funcs.txt"
+out_dir = "generated"
+strict = true
+
+[runtime]
+window_title = "ODT- Recompiled"
+memcard_dir = "saves"
+overlay_cache = true
+
+[video]
+renderer = "opengl"
+aspect_ratio = "4:3"
+
+[controller]
+default_mode = "digital"
+
+# Online mount gate: digests + track count + optional TOC fingerprint
+# (see docs/NETPLAY.md).
+[netplay]
+require_cue = true
+required_tracks = 2
+required_disc_fp = "5e4b9658e093241595132a965e72fb44e6337174c6eead413056dad1dc49f208"

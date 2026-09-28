@@ -1,0 +1,29 @@
+{
+  "cue_path": "/Users/jamie/Desktop/O.D.T. (USA)/O.D.T. (USA).cue",
+  "cue_name": "O.D.T. (USA).cue",
+  "bin_name": "O.D.T. (USA) (Track 1).bin",
+  "track_count": 2,
+  "data_track_size": 568635984,
+  "data_track_md5": "f63ba68b659e16d9a01cd87af1bfca81",
+  "data_track_sha1": "e7f61463fc39d317ba5eb67b7a1fc7069822ec42",
+  "data_track_crc32": "7eb6560a",
+  "boot_exe": "SLUS_006.98",
+  "serial": "SLUS-00698",
+  "serial_exe": "SLUS_006.98",
+  "volume_id": "ODT",
+  "display_name": "ODT-",
+  "load_address": "0x80010000",
+  "entry_pc": "0x800119E4",
+  "text_size": "0x00096000",
+  "stack_base": "0x801FFFF0",
+  "require_cue": true,
+  "required_disc_fp": "5e4b9658e093241595132a965e72fb44e6337174c6eead413056dad1dc49f208",
+  "boot_exe_sha256": "88969c806d121c0c4975568b27463479d4f4ed6c4b6accc5765ca79b8f07f658",
+  "seed_count": 1265,
+  "warnings": [],
+  "notes": [
+    "entry_pc/load_address/text_size/stack_base taken from PS-X EXE header.",
+    "seeds are first-pass boot-EXE JAL targets (+ entry); expect to grow as overlays / runtime paths are discovered.",
+    "required_disc_fp is psxrecomp-toc-v1 (matches runtime DiscIdentity)."
+  ]
+}
