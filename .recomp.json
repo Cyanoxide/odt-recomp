@@ -1,0 +1,13 @@
+{
+  "$schema": "https://recomp.fyi/schema/v1.json",
+  "game": "ODT-",
+  "system": "PS1",
+  "type": "recomp",
+  "toolchain": "psxrecomp",
+  "status": "exploring",
+  "project": "ODT-Recomp",
+  "original": {
+    "region": "USA",
+    "serial": "SLUS-00698"
+  }
+}
