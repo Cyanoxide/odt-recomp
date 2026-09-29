@@ -1,4 +1,4 @@
-# ODT- Recompiled
+# O.D.T. (Or Die Trying) - Recompilation Project
 
 <!-- retcomm-readme-metrics -->
 [![GitHub downloads (all assets, all releases)](https://img.shields.io/github/downloads/Cyanoxide/odt-recomp/total)](https://github.com/Cyanoxide/odt-recomp/releases)
@@ -6,17 +6,27 @@
 [![GitHub release](https://img.shields.io/github/v/release/Cyanoxide/odt-recomp)](https://github.com/Cyanoxide/odt-recomp/releases/latest)
 <!-- /retcomm-readme-metrics -->
 
+---
+
+<!-- coverage-progress -->
+<img src="docs/coverage.svg" alt="Native code coverage" width="100%">
+<!-- /coverage-progress -->
+
+---
+
+<br>
+
 <!-- retcomm-readme-boxart -->
 <p align="center">
   <img src="launcher_assets/img/boxart.png" alt="ODT- box art" width="280">
 </p>
 <!-- /retcomm-readme-boxart -->
 
-Static recompilation of **ODT-** built on
+
+
+A simple recompilation project for the PS1 game O.D.T. (Or Die Trying) built using
 [psxrecomp](https://github.com/mstan/psxrecomp) and
 [recomp-ui](https://github.com/RetroPortingToolKit/recomp-ui).
-
-A simple recompilation project for the PS1 game O.D.T. (Or Die Trying).
 
 | | |
 |---|---|
@@ -25,8 +35,6 @@ A simple recompilation project for the PS1 game O.D.T. (Or Die Trying).
 | Publisher | Psygnosis |
 | Year | 1998 |
 
-Scaffolded with the New Project Layout. See
-`psxrecomp/docs/GAME_PROJECT_SETUP.md` for the full flow.
 
 <!-- retcomm-readme-launcher -->
 ## Retro Launcher
@@ -53,6 +61,17 @@ shares the portable toolchain used by per-title launchers, and automates
 BIOS/ROM/save plumbing so you are not stuck repeating each game’s wizard by hand.
 <!-- /retcomm-readme-launcher -->
 
+## Quick start (dev)
+
+```bash
+git submodule update --init --recursive
+./psxrecomp/tools/ci/build_emitters.sh
+python3 psxrecomp/psxrecomp_cli.py generate \
+  --config game.toml --project-root . --disc disc/<your>.cue
+cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build-release --target psx-runtime
+```
+
 ## Legal
 
 You must own the original game. Disc images under `disc/` are gitignored and
@@ -65,40 +84,9 @@ Optional box art under `launcher_assets/img/` may come from
 [libretro-thumbnails](https://github.com/libretro-thumbnails/libretro-thumbnails)
 (`Named_Boxarts`); see `BOXART_SOURCE.txt` when present.
 
-## Quick start (dev)
 
-```bash
-git submodule update --init --recursive
-./psxrecomp/tools/ci/build_emitters.sh
-python3 psxrecomp/psxrecomp_cli.py generate \
-  --config game.toml --project-root . --disc disc/<your>.cue
-cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build-release --target psx-runtime
-```
 
-Zip prefix for CI artifacts: `odt`.
 
-## Symbols
 
-Progressive map: `symbols.toml` → `python3 tools/sync_symbols.py` →
-`psx_symbols.h` (`PSX_FN_*`). See `psxrecomp/docs/SYMBOLS.md`.
 
-## Framework pins
 
-Submodule gitlinks (`psxrecomp`, optional `recomp-ui`, nested `recomp-net`)
-are authoritative. `framework_pins.txt` is an optional scaffold snapshot;
-release CI logs SHAs with `record_pins.sh` but builds whatever the gitlinks
-resolve to. Bump submodules deliberately — do not float on `main`/`master`
-in release CI.
-
-<!-- retcomm-readme-raid -->
----
-
-<p align="center">
-  <sub><b>R.A.I.D. — Retro AI Development</b> · a Discord for AI-assisted retro reverse-engineering, decomp &amp; recomp</sub>
-</p>
-
-<p align="center">
-  <a href="https://discord.gg/Ad9BwSzctP"><img src=".github/raid-discord.png" alt="Join the Retro AI Development (R.A.I.D.) Discord" width="200"></a>
-</p>
-<!-- /retcomm-readme-raid -->
