@@ -52,3 +52,20 @@ target = "disc_raw"
 offset = 310373777
 expected = "4f 70 74 69 6f 6e 53"
 replace = "4f 70 74 69 6f 6e 73"
+
+# --- #
+
+[[feature]]
+id = "captain-text"
+name = "Captain Dialogue"
+description = "Replaces the first line the Captain speaks in LEVEL00."
+group = "Debug"
+default_enabled = true
+
+# 'The nautiflyus is severely damaged.' -> 'Welcome to ODT Recomp by Cyanoxide'
+[[patch]]
+feature = "captain-text"
+target = "disc_raw"
+offset = 3932711
+expected = "54 68 65 20 6e 61 75 74 69 66 6c 79 75 73 20 69 73 20 73 65 76 65 72 65 6c 79 20 64 61 6d 61 67 65 64 2e"
+replace = "57 65 6c 63 6f 6d 65 20 74 6f 20 4f 44 54 20 52 65 63 6f 6d 70 20 62 79 20 43 79 61 6e 6f 78 69 64 65 20"
