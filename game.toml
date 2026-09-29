@@ -2,7 +2,7 @@
 # Review before shipping. Runtime quirks / overlay seeds still need hand work.
 
 [game]
-name = "ODT-"
+name = "O.D.T."
 id = "SLUS-00698"
 players = 1
 exe = "disc/SLUS_006.98"
@@ -35,7 +35,7 @@ out_dir = "generated"
 strict = true
 
 [runtime]
-window_title = "ODT- Recompiled"
+window_title = "O.D.T. (Or Die Trying) - Recompiled"
 memcard_dir = "saves"
 overlay_cache = true
 
@@ -45,9 +45,9 @@ aspect_ratio = "4:3"
 
 [controller]
 default_mode = "digital"
+multitap_analog = true
 
-# Online mount gate: digests + track count + optional TOC fingerprint
-# (see docs/NETPLAY.md).
+# Online mount gate: digests + track count + optional TOC fingerprint.
 [netplay]
 require_cue = true
 required_tracks = 2
