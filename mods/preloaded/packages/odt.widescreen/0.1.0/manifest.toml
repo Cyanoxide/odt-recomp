@@ -1,0 +1,26 @@
+# Widescreen (16:9). Binds the feature to the activation plugin in
+# src/odt_widescreen.c, which is compiled into the runtime; no native code
+# ships in this package.
+
+format_version = 7
+id = "odt.widescreen"
+version = "0.1.0"
+name = "ODT Widescreen"
+author = "Cyanoxide"
+description = "Presents O.D.T. at 16:9 using the GTE X-squash widescreen hack."
+license = "MIT"
+resolver = "declarative"
+
+[[target]]
+game_id = "SLUS-00698"
+
+[[feature]]
+id = "widescreen"
+name = "Widescreen (16:9)"
+description = "Widens the field of view to 16:9. FMVs and menus stay 4:3 by framework policy."
+group = "Video"
+default_enabled = true
+
+[[plugin]]
+feature = "widescreen"
+id = "odt.widescreen"

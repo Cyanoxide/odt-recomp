@@ -41,7 +41,15 @@ overlay_cache = true
 
 [video]
 renderer = "opengl"
-aspect_ratio = "4:3"
+aspect_ratio = "4:3"   # inert on PSX; see mods/preloaded/packages/odt.widescreen
+
+[widescreen]
+# native_wide expects the game to fill the widened render target; O.D.T. does
+# not, so the side margins come out black. false = GTE squash + stretched present.
+native_wide = false
+# Fully 3D with no sprite_tag_funcs helper. Without this no frame is classified
+# as gameplay and everything pillarboxes 4:3. 2D screens still present 4:3.
+gte_game_mode = true
 
 [controller]
 default_mode = "digital"
