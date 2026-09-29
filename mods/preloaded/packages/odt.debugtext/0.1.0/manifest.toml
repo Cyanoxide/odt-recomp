@@ -1,0 +1,54 @@
+# Debug mod: proves game text and artwork can be changed from this repo alone --
+# no psxrecomp fork, no submodule edit, and the disc image is never written to
+# (disc_raw patches intercept CD reads).
+#
+# offset = lba*2352 + byte_in_sector. Patches are EQUAL LENGTH and must not cross
+# a sector boundary; short replacements are space-padded. `expected` guards the
+# BYTES, not the meaning -- it will patch a string that is never displayed.
+
+format_version = 7
+id = "odt.debugtext"
+version = "0.1.0"
+name = "ODT Debug Text"
+author = "Cyanoxide"
+description = "Debug mod: swaps in-game strings and the legal screen to verify disc patching."
+license = "MIT"
+resolver = "declarative"
+
+[[target]]
+game_id = "SLUS-00698"
+disc_sha256 = "9280dadd865eb29f5e524ac6d1dbea959f4802e9edb5feb53fb232ea69f2e04a"
+
+# --- #
+
+[[feature]]
+# Main menu is a text script in RSC/NTSC/GFILES.LNK ("// Scripte du Menu").
+id = "menu-case"
+name = "Lowercase Menu Labels"
+description = "Main menu ships a capitalised final letter (New gamE / Load gamE / OptionS), this lowercases them."
+group = "Debug"
+default_enabled = true
+
+# 'New gamE' -> 'New game'
+[[patch]]
+feature = "menu-case"
+target = "disc_raw"
+offset = 310373726
+expected = "4e 65 77 20 67 61 6d 45"
+replace = "4e 65 77 20 67 61 6d 65"
+
+# 'Load gamE' -> 'Load game'
+[[patch]]
+feature = "menu-case"
+target = "disc_raw"
+offset = 310373751
+expected = "4c 6f 61 64 20 67 61 6d 45"
+replace = "4c 6f 61 64 20 67 61 6d 65"
+
+# 'OptionS' -> 'Options'
+[[patch]]
+feature = "menu-case"
+target = "disc_raw"
+offset = 310373777
+expected = "4f 70 74 69 6f 6e 53"
+replace = "4f 70 74 69 6f 6e 73"
