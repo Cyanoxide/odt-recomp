@@ -42,6 +42,8 @@ overlay_cache = true
 [video]
 renderer = "opengl"
 aspect_ratio = "4:3"   # inert on PSX; see mods/preloaded/packages/odt.widescreen
+# O.D.T.'s MDEC uploads full width; the default 8-column blank loses picture.
+depth24_trailing_margin = 0
 
 [widescreen]
 # O.D.T. doesn't fill a widened render target, so squash+stretch instead.
