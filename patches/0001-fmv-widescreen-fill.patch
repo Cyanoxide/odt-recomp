@@ -1,0 +1,188 @@
+diff --git a/runtime/src/gpu_gl_renderer.c b/runtime/src/gpu_gl_renderer.c
+index 44ac6bbb..b3789852 100644
+--- a/runtime/src/gpu_gl_renderer.c
++++ b/runtime/src/gpu_gl_renderer.c
+@@ -4004,6 +4004,24 @@ static void letterbox_rect(int ww, int wh, int *x, int *y, int *w, int *h) {
+     letterbox_rect_aspect(ww, wh, s_aspect_num, s_aspect_den, x, y, w, h);
+ }
+ 
++/* Cover (zoom-to-fill) instead of contain: scale until BOTH axes are covered
++ * and let the overflow crop. For 4:3 content in a wider window this removes the
++ * pillarbox at the cost of the top and bottom of the source. */
++static void letterbox_rect_aspect_fill(int ww, int wh, int num, int den,
++                                       int *x, int *y, int *w, int *h) {
++    int dw = ww, dh = (ww * den) / num;
++    if (dh < wh) { dh = wh; dw = (wh * num) / den; }
++    *x = (ww - dw) / 2;
++    *y = (wh - dh) / 2;
++    *w = dw; *h = dh;
++}
++
++/* FMV fill: 4:3-pinned frames (FMV/boot) cover the window rather than
++ * pillarboxing, cropping top and bottom instead of showing bars. */
++static void pinned_rect_4_3(int ww, int wh, int *x, int *y, int *w, int *h) {
++    letterbox_rect_aspect_fill(ww, wh, 4, 3, x, y, w, h);
++}
++
+ static GLuint make_tex(GLenum internal, int w, int h, GLenum fmt, GLenum type) {
+     GLuint t = 0;
+     glGenTextures(1, &t);
+@@ -4608,6 +4626,94 @@ void gl_renderer_shutdown(void) {
+     s_interp_fbo = 0;   /* died with the context */
+ }
+ 
++/* Rows that have ever shown picture in this video. VRAM coverage can't see a
++ * letterbox baked into the MDEC stream, but such a row is never lit, while dark
++ * content eventually is — so this converges downward and never oscillates. */
++static uint64_t s_evl[32];
++static int s_evl_h = -1, s_evl_top = -1, s_evl_bot = -1, s_evl_black = 0;
++/* Never crop more than this per side, so a frame that is still black doesn't
++ * zoom absurdly. Above O.D.T.'s largest real letterbox (40 of 236 = 17%). */
++#define FMV_MAX_BAR_PCT 20
++/* The bar edge is an MDEC block boundary, so the last row or two of "picture"
++ * is a dark transition. Trim a couple of rows past it - unnoticeable at 236. */
++#define FMV_BAR_MARGIN 2
++
++static void fmv_accumulate(const uint32_t *px, int w, int h) {
++    if (!px || w <= 0 || h <= 0 || h > 2048) return;
++    if (h != s_evl_h) {
++        memset(s_evl, 0, sizeof s_evl);
++        s_evl_h = h; s_evl_top = s_evl_bot = -1;
++    }
++    int x, y, peak = 0;
++    for (y = 0; y < h; y += 4)
++        for (x = 0; x < w; x += 8) {
++            uint32_t c = px[(size_t)y * w + x];
++            uint32_t r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, b = c & 0xFF;
++            uint32_t m = r > g ? (r > b ? r : b) : (g > b ? g : b);
++            if ((int)m > peak) peak = (int)m;
++        }
++    /* A run of black frames is the gap between videos: start a fresh map. The
++     * crop in force stays until the next lit frame, which is invisible here. */
++    if (peak <= 8) {
++        if (++s_evl_black >= 4) { memset(s_evl, 0, sizeof s_evl); s_evl_black = 0; }
++        return;
++    }
++    s_evl_black = 0;
++    /* Measured on ODT's movies: at a floor of 8 a letterbox row has zero lit
++     * pixels while picture rows are saturated. Lower catches MDEC ringing in
++     * the bars, higher discards genuinely dark picture. */
++    const int need = (w / 4) / 8 + 2;
++    for (y = 0; y < h; y++) {
++        if ((s_evl[y >> 6] >> (y & 63)) & 1ull) continue;
++        int nlit = 0;
++        for (x = 0; x < w; x += 4) {
++            uint32_t c = px[(size_t)y * w + x];
++            uint32_t r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, b = c & 0xFF;
++            uint32_t m = r > g ? (r > b ? r : b) : (g > b ? g : b);
++            if ((int)m > 8 && ++nlit >= need) {
++                s_evl[y >> 6] |= 1ull << (y & 63); break;
++            }
++        }
++    }
++    int first = -1, last = -1;
++    for (y = 0; y < h; y++)
++        if ((s_evl[y >> 6] >> (y & 63)) & 1ull) { if (first < 0) first = y; last = y; }
++    /* The estimate is never smaller than the real letterbox: a bar row never
++     * lights, and the map only grows, so it shrinks toward the truth from
++     * above. Applying it every frame therefore cannot show a bar - only a
++     * slight over-crop while the picture is still fading up from black. */
++    const int cap = h * FMV_MAX_BAR_PCT / 100;
++    int t = first < 0 ? cap : first;
++    int b = first < 0 ? cap : h - 1 - last;
++    if (first >= 0) {
++        if (t > 0) t += FMV_BAR_MARGIN;
++        if (b > 0) b += FMV_BAR_MARGIN;
++    }
++    s_evl_top = t > cap ? cap : t;
++    s_evl_bot = b > cap ? cap : b;
++}
++
++/* Cover the window with the CONTENT region, then express that as the rect for
++ * the whole source so the black rows fall outside the viewport. */
++static void fmv_content_fill_rect(int ww, int wh, int src_h, int top, int bot,
++                                  int *lx, int *ly, int *lw, int *lh) {
++    if (top < 0 || bot < 0 || top + bot >= src_h) return;
++    int content_h = src_h - top - bot;
++    if (content_h <= 0) return;
++    /* Content display aspect: 4:3 widened by the fraction of field it uses. */
++    int cw = ww;
++    int ch = (ww * 3 * content_h) / (4 * src_h);
++    if (ch < wh) { ch = wh; cw = (wh * 4 * src_h) / (3 * content_h); }
++    *lw = cw;
++    /* Round scale and offset away from zero. Truncating either leaves the
++     * content's bottom edge a fraction of a pixel high, showing a 1px sliver. */
++    *lh = (ch * src_h + content_h - 1) / content_h;
++    *lx = (ww - cw) / 2;
++    /* glViewport is bottom-left origin: source row 0 sits at ly+lh and row
++     * src_h at ly, so the content's BOTTOM edge is what anchors ly. */
++    *ly = (wh - ch) / 2 - (bot * ch + content_h - 1) / content_h;
++}
++
+ /* CPU-readout present (24-bit FMV frames and the PSX_GL_FORCE_CPU_PRESENT
+  * diagnostic): full-window clear, then a quad into the letterbox rect.
+  * force_4_3 pins the rect to native 4:3 regardless of the display aspect —
+@@ -4623,7 +4729,7 @@ void gl_renderer_present(const uint32_t *pixels, int src_w, int src_h, int linea
+     glClearColor(0.f,0.f,0.f,1.f); glClear(GL_COLOR_BUFFER_BIT);
+     int lx, ly, lw, lh;
+     if (force_4_3)
+-        letterbox_rect_aspect(ww, wh, 4, 3, &lx, &ly, &lw, &lh);
++        pinned_rect_4_3(ww, wh, &lx, &ly, &lw, &lh);
+     else
+         letterbox_rect(ww, wh, &lx, &ly, &lw, &lh);
+     /* Short GP1(07h) bands (MotK FMV is 128 lines) only fill a fraction of
+@@ -4640,6 +4746,27 @@ void gl_renderer_present(const uint32_t *pixels, int src_w, int src_h, int linea
+         if (content_h < 1) content_h = 1;
+         ly += (lh - content_h) / 2;
+         lh = content_h;
++        /* Fill mode: a short band re-letterboxes inside the covered rect and
++         * puts the bars back. Zoom until it covers the window height instead,
++         * cropping width. */
++        if (force_4_3 && lh > 0 && lh < wh) {
++            lw = (lw * wh) / lh;
++            lh = wh;
++            lx = (ww - lw) / 2;
++            ly = 0;
++        }
++    }
++    /* Fill mode: crop each video's own letterbox rather than a blanket
++     * overscan, measuring it from the frames themselves. */
++    if (force_4_3) {
++        fmv_accumulate(pixels, src_w, src_h);
++        /* Before any lit frame, assume the cap: the picture is still black, so
++         * over-cropping is invisible, whereas no crop would show the bars. */
++        int cap = src_h * FMV_MAX_BAR_PCT / 100;
++        int top = s_evl_top < 0 ? cap : s_evl_top;
++        int bot = s_evl_bot < 0 ? cap : s_evl_bot;
++        if (top > 0 || bot > 0)
++            fmv_content_fill_rect(ww, wh, src_h, top, bot, &lx, &ly, &lw, &lh);
+     }
+     /* Optional trailing-column crop (depth24 margin): shrink the draw width
+      * left-aligned so cleared black remains on the right — never stretch. */
+@@ -5625,7 +5752,7 @@ static int interp_present_pair(GLuint a, GLuint b, float t, int blend_mode) {
+     int ww = 0, wh = 0; SDL_GL_GetDrawableSize(s_win, &ww, &wh);
+     int lx, ly, lw, lh;
+     if (s_interp_force_4_3)
+-        letterbox_rect_aspect(ww, wh, 4, 3, &lx, &ly, &lw, &lh);
++        pinned_rect_4_3(ww, wh, &lx, &ly, &lw, &lh);
+     else
+         letterbox_rect(ww, wh, &lx, &ly, &lw, &lh);
+     glDisable(GL_SCISSOR_TEST);
+@@ -6751,7 +6878,7 @@ int gl_renderer_present_hold_last(void) {
+                             0, 0, s_hold_tw, s_hold_th, 0, lx, ly, lw, lh, 0, 0, 1);
+     } else {
+         if (s_hold_force_4_3)
+-            letterbox_rect_aspect(ww, wh, 4, 3, &lx, &ly, &lw, &lh);
++            pinned_rect_4_3(ww, wh, &lx, &ly, &lw, &lh);
+         else
+             letterbox_rect(ww, wh, &lx, &ly, &lw, &lh);
+         present_target_quad(s_hold_tex, s_hold_tw, s_hold_th,
+@@ -6792,7 +6919,7 @@ void gl_renderer_present_vram(int disp_x, int disp_y, int w, int h, int linear,
+     int ww = 0, wh = 0; SDL_GL_GetDrawableSize(s_win, &ww, &wh);
+     int lx, ly, lw, lh;
+     if (force_4_3)
+-        letterbox_rect_aspect(ww, wh, 4, 3, &lx, &ly, &lw, &lh);
++        pinned_rect_4_3(ww, wh, &lx, &ly, &lw, &lh);
+     else
+         letterbox_rect(ww, wh, &lx, &ly, &lw, &lh);
+     /* No short-band adjustment on the 15-bit FBO path: a game's native short
