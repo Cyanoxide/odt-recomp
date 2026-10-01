@@ -287,6 +287,17 @@ each other's borders. **Screenshots cannot verify this** - the animation is a
 few frames and a present_shot round-trip is ~65ms, so every capture lands on the
 settled state. Needs a human to confirm.
 
+**Zone anchoring is gated on the gameplay health bar.** Zones are right for the
+HUD and wrong for menu text: on character select "Press" spans x=20..68 and
+crosses the x=60 boundary, so four glyphs anchored left and the fifth centre -
+rendered as `Pres    s`. No threshold fixes it (the right-hand text straddles
+x=260 the same way, and the gauge at x=15..53 needs the left zone). The bar's
+wide quads (w>=90; menus top out near 28) mark gameplay; without them every
+bottom-band quad shares the centre anchor so a text run cannot split. Net
+result: menus sit at 4:3 proportions centred, gameplay gets the 3-element
+layout. Only the bottom band (y>=190) is touched at all, so menu content ABOVE
+that line is still stretched - accepted, few menu screens.
+
 `func`/`ra` do NOT discriminate HUD from world: a bar quad and a world effect
 both report `func=0x000029CC ra=0x8008ACC8`. Position is the only clean signal.
 All numbers come from level 0 - other levels are unverified.
