@@ -1,9 +1,9 @@
 # O.D.T. (Or Die Trying) - Recompilation Project
 
 <!-- retcomm-readme-metrics -->
-[![GitHub downloads (all assets, all releases)](https://img.shields.io/github/downloads/Cyanoxide/odt-recomp/total)](https://github.com/Cyanoxide/odt-recomp/releases)
-[![GitHub downloads (latest release)](https://img.shields.io/github/downloads/Cyanoxide/odt-recomp/latest/total)](https://github.com/Cyanoxide/odt-recomp/releases/latest)
-[![GitHub release](https://img.shields.io/github/v/release/Cyanoxide/odt-recomp)](https://github.com/Cyanoxide/odt-recomp/releases/latest)
+[![Status](https://img.shields.io/badge/status-work%20in%20progress-orange)](https://github.com/Cyanoxide/odt-recomp)
+[![Built with psxrecomp](https://img.shields.io/badge/built%20with-psxrecomp-blue)](https://github.com/mstan/psxrecomp)
+[![Last commit](https://img.shields.io/github/last-commit/Cyanoxide/odt-recomp)](https://github.com/Cyanoxide/odt-recomp/commits)
 <!-- /retcomm-readme-metrics -->
 
 ---
