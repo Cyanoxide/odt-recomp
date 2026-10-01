@@ -41,6 +41,10 @@ overlay_cache = true
 
 [video]
 renderer = "opengl"
+# REQUIRED by the HUD un-squash: at 1x a narrowed sprite has fewer destination
+# pixels than texels and drops columns, clipping UI borders. Must ALSO be set
+# in settings.toml to the same value - setting only one crops the frame.
+supersampling = 2
 aspect_ratio = "4:3"   # inert on PSX; see mods/preloaded/packages/odt.widescreen
 # O.D.T.'s MDEC uploads full width; the default 8-column blank loses picture.
 depth24_trailing_margin = 0

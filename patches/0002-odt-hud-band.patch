@@ -1,0 +1,84 @@
+diff --git a/runtime/include/gpu.h b/runtime/include/gpu.h
+index 9314184d..e0889925 100644
+--- a/runtime/include/gpu.h
++++ b/runtime/include/gpu.h
+@@ -76,6 +76,8 @@ void gpu_depth24_present_row(const GpuDisplayInfo* di, uint32_t y, uint32_t* out
+  * shrinking the CRTC-derived draw width (avoids a flickering black pillar). */
+ uint32_t gpu_depth24_rgb_limit(uint32_t display_x, uint32_t crtc_w);
+ void     gpu_depth24_upload_span_reset(void);
++/* O.D.T.: un-squash flat-textured HUD quads in the bottom band. */
++void     gpu_ws_set_odt_hud_band(int on);
+ /* MotK intro cuts retarget GP1(07h). While hold > 0, present should skip
+  * Swap (keep prior frame) so stale trailing VRAM never flashes. One tick
+  * per vblank; returns non-zero while the hold is still active after tick. */
+diff --git a/runtime/src/gpu.c b/runtime/src/gpu.c
+index b2857352..3194ddcb 100644
+--- a/runtime/src/gpu.c
++++ b/runtime/src/gpu.c
+@@ -2202,6 +2202,58 @@ int psx_ws_prim_is_tagged(void) {
+     return 0;
+ }
+ 
++/* ---- O.D.T. HUD band ------------------------------------------------------
++ * O.D.T. emits no SPRT/RECT prims at all, so hud_sprt_squash and auto_ui_squash
++ * have nothing to act on - its HUD is flat-textured quads (GP0 0x2C-0x2F) in
++ * the bottom band. Un-squash those so they present at native proportions,
++ * anchored by x zone: equip icons hug their edges, the bar assembly centres.
++ * Explicit zones rather than ws_hud_pivot's thirds because a bar tick at x=75
++ * falls in the left third and would detach from the bar it belongs to. */
++#define ODT_HUD_BAND_Y      190   /* HUD occupies y 195..231 of 240 */
++#define ODT_HUD_LEFT_X       60   /* centre < this  -> left edge   */
++#define ODT_HUD_RIGHT_X     260   /* centre > this  -> right edge  */
++/* Top-left HUD: the lives counter (portrait + "x N") and the L1 ability d-pad
++ * (four 31x31 cells). BOTH animate in - the counter slides from the left, the
++ * d-pad drops from above - so there is no fixed y band that holds them: a cell
++ * outside it goes unsquashed while its neighbours are squashed, which shows as
++ * ovals mid-slide and cells overlapping each other's borders. Match on SIZE
++ * instead, which does not move, with only an upper y bound and a tight x bound
++ * so the right-hand menu overlays at x>=245 are untouched. */
++#define ODT_TL_Y_HI         105   /* at rest the d-pad ends at y=101 */
++#define ODT_TL_X_HI         130   /* nearest other element starts at x=130 */
++#define ODT_TL_MAX_DIM       48   /* cells 31x31, portrait 28x31, digits 8x8 */
++
++static int ws_odt_hud_band = 0;
++void gpu_ws_set_odt_hud_band(int on) { ws_odt_hud_band = on ? 1 : 0; }
++
++static void ws_odt_hud_transform_quad(int32_t *vx, const int32_t *vy) {
++    if (!ws_odt_hud_band || !ws_active()) return;
++    int32_t minx = vx[0], maxx = vx[0], miny = vy[0];
++    for (int i = 1; i < 4; i++) {
++        if (vx[i] < minx) minx = vx[i];
++        if (vx[i] > maxx) maxx = vx[i];
++        if (vy[i] < miny) miny = vy[i];
++    }
++    int32_t maxy = vy[0];
++    for (int i = 1; i < 4; i++) if (vy[i] > maxy) maxy = vy[i];
++    int32_t X = ws_disp_x(), W = ws_disp_w();
++    if (minx < X || maxx > X + W) return;         /* off-screen: world effect */
++    int32_t anchor;
++    if (miny >= ODT_HUD_BAND_Y) {                 /* bottom HUD: by x zone */
++        int32_t cx = (minx + maxx) / 2 - X;
++        anchor = cx < ODT_HUD_LEFT_X  ? X
++               : cx > ODT_HUD_RIGHT_X ? X + W
++                                      : X + W / 2;
++    } else if (maxy <= ODT_TL_Y_HI && maxx - X <= ODT_TL_X_HI &&
++               maxx - minx <= ODT_TL_MAX_DIM &&
++               maxy - miny <= ODT_TL_MAX_DIM) {   /* top-left HUD: left edge */
++        anchor = X;
++    } else {
++        return;                                   /* leave everything else */
++    }
++    for (int i = 0; i < 4; i++) vx[i] = ws_scale_about(vx[i], anchor);
++}
++
+ /* Squash x around pivot ax by ws_xnum/ws_xden, round to nearest. */
+ static int32_t ws_scale_about(int32_t x, int32_t ax) {
+     int32_t d = x - ax;
+@@ -4193,6 +4245,7 @@ static void gp0_exec_textured_quad(void) {
+             for (int i = 0; i < 4; i++) vx[i] = ws_scale_about(vx[i], ws_ax);
+     }
+     ws_auto_ui_transform_quad(vx, vy);
++    ws_odt_hud_transform_quad(vx, vy);
+     ws_nw_backdrop_stretch_quad(vx, vy);   /* full-frame 2D backdrop image stretch (no-op else) */
+     ws_nw_hud_shift_vertices(vx, 4);
+ 
