@@ -85,3 +85,6 @@ starvation_dump.jsonl
 !/catalog_identity.json
 !/disc_probe.json
 !/.recomp.json
+
+# Generated: embeds original disc bytes as patch guards.
+mods/preloaded/packages/odt.voiceline/*/manifest.toml

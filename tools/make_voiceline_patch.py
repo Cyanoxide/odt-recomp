@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+"""Generate the captain voice-line disc_raw patches.
+
+The sample is SPU-ADPCM at LBA 1819..1824 (byte 628), 9840 bytes / 615 blocks,
+2.082s at 8269 Hz. disc_raw patches must be equal length and must not cross a
+sector boundary, so this emits one patch per sector.
+
+  python3 tools/make_voiceline_patch.py assets/voice/<clip>.wav > manifest-body.toml
+"""
+import os, subprocess, sys, wave, struct, tempfile
+
+LBA0, BYTE0, LENGTH, BLOCKS, RATE = 1819, 628, 9840, 615, 8269
+LEVEL_TRIM = 1.25          # sit slightly above the original (user preference)
+DISC = "disc/O.D.T. (USA) (Track 1).bin"
+F = [(0,0),(60,0),(115,-52),(98,-55),(122,-60)]
+
+def enc_block(samples, s1, s2, last):
+    best=None
+    for filt,(f0,f1) in enumerate(F):
+        for shift in range(13):
+            p1,p2,err,nibs=s1,s2,0.0,[]
+            for x in samples:
+                pred=(p1*f0+p2*f1)/64.0
+                q=max(-8,min(7,int(round((x-pred)/(1<<(12-shift))))))
+                nibs.append(q&0x0F)
+                rec=max(-32768,min(32767,(q<<(12-shift))+pred))
+                err+=(x-rec)**2; p2,p1=p1,rec
+            if best is None or err<best[0]: best=(err,filt,shift,nibs,p1,p2)
+    _,filt,shift,nibs,p1,p2=best
+    b=bytearray(16); b[0]=((filt&7)<<4)|(shift&0xF); b[1]=0x01 if last else 0x00
+    for i in range(0,28,2): b[2+i//2]=(nibs[i]&0xF)|((nibs[i+1]&0xF)<<4)
+    return bytes(b),p1,p2
+
+def decode_adpcm(buf):
+    """Decode SPU-ADPCM -> PCM, used to measure the original's level."""
+    out=[]; s1=s2=0.0
+    for p in range(0,len(buf),16):
+        b=buf[p:p+16]
+        if len(b)<16: break
+        shift=b[0]&0x0F; filt=min((b[0]>>4)&7,4); f0,f1=F[filt]
+        for i in range(28):
+            byte=b[2+i//2]; nib=(byte>>4) if (i&1) else (byte&0x0F)
+            if nib>7: nib-=16
+            v=max(-32768,min(32767,((nib<<(12-shift)) if shift<=12 else 0)+(s1*f0+s2*f1)/64.0))
+            out.append(int(v)); s2=s1; s1=v
+        if b[1]&0x01: break
+    return out
+
+def active_rms(pcm, floor=200):
+    a=[x for x in pcm if abs(x)>floor]
+    return (sum(x*x for x in a)/len(a))**0.5 if a else 0.0
+
+def spectral_match(pcm, ref, sr, taps=63):
+    """Match the reference's spectral tilt. A flat gain leaves the replacement
+    dull against the original (measured ~11 dB short at 3-4 kHz), which reads
+    as 'washed out'. Builds a short linear-phase FIR from the smoothed
+    magnitude ratio and applies it."""
+    import numpy as np
+    x=np.asarray(pcm,dtype=float); r=np.asarray(ref,dtype=float)
+    def spec(v):
+        v=v[np.abs(v)>200]
+        n=(len(v)//1024)*1024
+        if n < 1024: return None
+        f=np.abs(np.fft.rfft(v[:n].reshape(-1,1024)*np.hanning(1024),axis=1)).mean(0)
+        return f+1e-9
+    sx,sr_=spec(x),spec(r)
+    if sx is None or sr_ is None: return pcm
+    ratio=sr_/sx
+    ratio/=np.median(ratio)                      # tilt only; level handled later
+    ratio=np.clip(ratio,0.25,8.0)
+    k=9                                          # smooth the correction curve
+    ratio=np.convolve(ratio,np.ones(k)/k,mode="same")
+    h=np.fft.irfft(ratio)                        # zero-phase -> linear-phase FIR
+    h=np.roll(h,taps//2)[:taps]*np.hanning(taps)
+    y=np.convolve(x,h,mode="same")
+    return y.tolist()
+
+def match_level(pcm, target_rms):
+    """Scale to the original's RMS, soft-limiting rather than clipping."""
+    cur=active_rms(pcm)
+    if cur<=0 or target_rms<=0: return pcm
+    g=target_rms/cur
+    knee=28000.0
+    out=[]
+    for x in pcm:
+        v=x*g
+        if abs(v)>knee:                      # soft knee above 28k
+            sign=1.0 if v>0 else -1.0
+            over=abs(v)-knee
+            v=sign*(knee+(32600.0-knee)*(1.0-pow(2.718281828,-over/6000.0)))
+        out.append(int(max(-32768,min(32767,v))))
+    return out, g
+
+def encode(pcm):
+    need=BLOCKS*28
+    pcm=list(pcm[:need])+[0]*max(0,need-len(pcm))
+    out=bytearray(); s1=s2=0.0
+    for i in range(BLOCKS):
+        d,s1,s2=enc_block(pcm[i*28:(i+1)*28],s1,s2,i==BLOCKS-1)
+        out+=d
+    return bytes(out)
+
+src=sys.argv[1]
+tmp=tempfile.mktemp(suffix=".wav")
+subprocess.run(["ffmpeg","-y","-loglevel","error","-i",src,"-ac","1",
+                "-ar",str(RATE),"-acodec","pcm_s16le",tmp],check=True)
+w=wave.open(tmp); n=w.getnframes()
+pcm=struct.unpack("<%dh"%n, w.readframes(n)); w.close(); os.unlink(tmp)
+if max(abs(x) for x in pcm)==0: sys.exit("source decodes to silence")
+raw=open(DISC,"rb")
+# read the original sample (sector-aware) to measure its level
+orig=bytearray(); k=0
+while k < LENGTH:
+    pos=BYTE0+k; sec=LBA0+pos//2048; off=pos%2048
+    take=min(2048-off, LENGTH-k)
+    raw.seek(sec*2352+24+off); orig+=raw.read(take); k+=take
+ref=decode_adpcm(bytes(orig))
+pcm=spectral_match(list(pcm), ref, RATE)
+tgt=active_rms(ref)*LEVEL_TRIM
+pcm,gain=match_level(list(pcm), tgt)
+print(f"# level-matched to original: x{gain:.2f} ({20*__import__('math').log10(gain):+.1f} dB)",
+      file=sys.stderr)
+new=encode(pcm)
+assert len(new)==LENGTH
+
+print("# Generated by tools/make_voiceline_patch.py -- do not hand-edit.")
+k=0; part=0
+while k < LENGTH:
+    pos=BYTE0+k; sec=LBA0+pos//2048; off=pos%2048
+    take=min(2048-off, LENGTH-k)
+    disc_off=sec*2352+24+off
+    raw.seek(disc_off); old=raw.read(take)
+    assert len(old)==take
+    print(f"\n# sector {part}: LBA {sec}, {take} bytes")
+    print("[[patch]]")
+    print('feature = "captain-line"')
+    print('target = "disc_raw"')
+    print(f"offset = {disc_off}")
+    print(f'expected = "{old.hex(" ")}"')
+    print(f'replace = "{new[k:k+take].hex(" ")}"')
+    k+=take; part+=1
+raw.close()
