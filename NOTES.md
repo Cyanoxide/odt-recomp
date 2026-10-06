@@ -265,6 +265,18 @@ untouched; the nearest other element starts at x=130 and is excluded by
 The d-pad is the cleanest proof the un-squash works: its cross is square in
 source space, so the whole cluster measures w/h 1.33 stretched and 1.00 fixed.
 
+**Zones are chosen per quad by size, never by a frame latch.** Zone anchoring is
+right for the HUD and wrong for menu text (a run crossing the x=60 boundary
+splits: "Press" -> "Pres" + "s"). The first attempt gated zones on the health
+bar being live within 2 frames, which fails whenever the bar misses a few
+frames: the bar sits between both thresholds so it looks identical either way,
+and only the two edge icons visibly snap back to 4:3. Measured instead - every
+HUD member is >=18 tall (icon frame 38x36, its art 19x21, bars 107x19 and
+103x18) or reaches y=231 (the 6x8 lives digit), while no menu glyph exceeds 14
+tall or y=222. `ODT_HUD_ELEM_MIN_H`/`ODT_HUD_FLOOR_Y` test exactly that, so no
+transient can drop zones mid-scene. Main menu draws nothing in the band at all;
+the text screens draw 22 prims, none wider than 28.
+
 **Un-squashing needs `supersampling = 2`.** At 1x raster a squashed 31px sprite
 has only 23 device pixels to hold 31 texels, so ~8 texel columns are dropped -
 visible as clipped borders on the d-pad circles and both bottom gauges. Padding
@@ -311,7 +323,9 @@ assumed STR target but is **not verified from ODT's own data**. Jamie reports th
 sounds wrong; likely the same root cause, but XA-ADPCM is interleaved into the same sectors so
 CD sector delivery and SPU pacing are separate candidates.
 
-Prime suspect is MOVIES.EXE running interpreted (below). **The pin bump is ruled out** — old pin
+**Interpreted overlays are now ruled out too.** After compiling 555 native shards (2026-10-02), dispatch during FMV is 99.1% native / 0.9% interpreted and the rate was unchanged at 4.29 fps. 15fps needs ~3600 mb/s against the ~1031 measured, so the remaining candidate is MDEC decode throughput in the runtime (IDCT/dequant), not ODT's own code. Profile that next.
+
+The earlier prime suspect was MOVIES.EXE running interpreted (below). **The pin bump is ruled out** — old pin
 `5c183967` measured 909 mb/s, new `c604cea4` 991, so the newer one is 9% *faster* despite adding
 per-instruction uncached-fetch accounting. Don't re-investigate that.
 

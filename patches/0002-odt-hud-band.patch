@@ -12,10 +12,10 @@ index 9314184d..e0889925 100644
   * Swap (keep prior frame) so stale trailing VRAM never flashes. One tick
   * per vblank; returns non-zero while the hold is still active after tick. */
 diff --git a/runtime/src/gpu.c b/runtime/src/gpu.c
-index b2857352..f4336d13 100644
+index b2857352..903c5041 100644
 --- a/runtime/src/gpu.c
 +++ b/runtime/src/gpu.c
-@@ -2202,6 +2202,74 @@ int psx_ws_prim_is_tagged(void) {
+@@ -2202,6 +2202,67 @@ int psx_ws_prim_is_tagged(void) {
      return 0;
  }
  
@@ -39,19 +39,14 @@ index b2857352..f4336d13 100644
 +#define ODT_TL_Y_HI         105   /* at rest the d-pad ends at y=101 */
 +#define ODT_TL_X_HI         130   /* nearest other element starts at x=130 */
 +#define ODT_TL_MAX_DIM       48   /* cells 31x31, portrait 28x31, digits 8x8 */
-+/* Zone anchoring is right for the gameplay HUD and WRONG for menu text: a text
-+ * run crossing a zone boundary splits ("Press" -> "Pres" + "s" on character
-+ * select, whose glyphs span x=20..68 across the x=60 boundary). No threshold
-+ * serves both - the gameplay gauge at x=15..53 needs the left zone that any
-+ * boundary low enough to spare the text would deny it. Gate on the health
-+ * bar's wide quads instead: gameplay has w>=90, menus top out around 28. */
-+#define ODT_HUD_BAR_MIN_W    90
++/* Zones suit the gameplay HUD but split menu text ("Press" -> "Pres" + "s"
++ * across the x=60 boundary). Tell them apart per quad by size, so no
++ * frame-to-frame latch can drop zones mid-scene. */
++#define ODT_HUD_ELEM_MIN_H   18   /* HUD members are 18-36 tall; glyphs <=14 */
++#define ODT_HUD_FLOOR_Y     226   /* HUD reaches y=231, menu text stops at 222 */
 +
 +static int ws_odt_hud_band = 0;
 +void gpu_ws_set_odt_hud_band(int on) { ws_odt_hud_band = on ? 1 : 0; }
-+/* Frame in which the bar last appeared; zones apply while it is live. */
-+static uint32_t ws_odt_bar_frame = 0;
-+static int ws_odt_bar_ever = 0;
 +
 +static void ws_odt_hud_transform_quad(int32_t *vx, const int32_t *vy) {
 +    if (!ws_odt_hud_band || !ws_active()) return;
@@ -67,11 +62,9 @@ index b2857352..f4336d13 100644
 +    if (minx < X || maxx > X + W) return;         /* off-screen: world effect */
 +    int32_t anchor;
 +    if (miny >= ODT_HUD_BAND_Y) {                 /* bottom HUD */
-+        uint32_t f = (uint32_t)s_frame_count;
-+        if (maxx - minx >= ODT_HUD_BAR_MIN_W) { ws_odt_bar_frame = f; ws_odt_bar_ever = 1; }
-+        /* Zones only while the gameplay bar is live; otherwise centre
-+         * everything so menu text runs keep one anchor and stay together. */
-+        int zones = ws_odt_bar_ever && (f - ws_odt_bar_frame) <= 2u;
++        /* Zones for HUD members only; menu text centres so a run crossing a
++         * zone boundary keeps one anchor and stays together. */
++        int zones = (maxy - miny) >= ODT_HUD_ELEM_MIN_H || maxy >= ODT_HUD_FLOOR_Y;
 +        int32_t cx = (minx + maxx) / 2 - X;
 +        anchor = !zones               ? X + W / 2
 +               : cx < ODT_HUD_LEFT_X  ? X
@@ -90,7 +83,7 @@ index b2857352..f4336d13 100644
  /* Squash x around pivot ax by ws_xnum/ws_xden, round to nearest. */
  static int32_t ws_scale_about(int32_t x, int32_t ax) {
      int32_t d = x - ax;
-@@ -4193,6 +4261,7 @@ static void gp0_exec_textured_quad(void) {
+@@ -4193,6 +4254,7 @@ static void gp0_exec_textured_quad(void) {
              for (int i = 0; i < 4; i++) vx[i] = ws_scale_about(vx[i], ws_ax);
      }
      ws_auto_ui_transform_quad(vx, vy);
