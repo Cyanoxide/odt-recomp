@@ -429,3 +429,31 @@ through it lands in gameplay having skipped the intro entirely.
    `internal_resolution` preset in Settings → Display. 60fps last.
 5. Two clean upstream PRs still available from the test triage above (`cli_generate_aot_static`,
    `aot_overlay_discovery`). `depth24_trailing_margin` landed as #432.
+
+## 60fps (render passes)
+
+`src/odt_60fps.cpp` redraws an in-between frame with the game's own code at
+interpolated GTE transforms (`docs/RENDER_PASSES.md`). Game logic stays at 30.
+
+| address | role |
+|---|---|
+| `0x800B1C2C` | frames per swap: 2 in gameplay, 1 in menus (passes off) |
+| `0x800B1B20` | frame struct awaiting the VSync callback (`func_800961FC`) |
+| `0x800B1C28` | frame struct being built: `0x800B1B28` / `0x800B1BA4` |
+
+Frame struct: DRAWENV `+8`, DISPENV `+0x64` (shows the other buffer), OT `+0x78`.
+
+- A frame is one round of a cooperative task scheduler (`func_80093230` yields),
+  `0x800932B8` to the submit `0x800932A8`. Logic and draw interleave, so a pass
+  replays the whole round and ends via a sentinel return at the submit.
+- Passes run at the submit's entry (the game's idle spin), in `SHOWN` flip mode,
+  at phases 0.5 (frame k) and 0.75 (α=0.5 in-between): the presenter sees the
+  callback's flip a VBlank late and only presents those phases.
+- The VSync IRQ updates timers and pad state mid-round; the plugin reapplies them
+  at the same yield in the replay. `patches/0004` makes slerp exact at t=0/1.
+- Check a replay at α=1: it must equal frame k+1 pixel for pixel.
+- Measure with `present_image_ring_get` (distinct images) and `gl_present_ring`
+  (present times); the FPS readout always says 60. Running two instances at once
+  overloads a MacBook Air in heavy scenes.
+- Dead ends: threshold 1 doubles game speed; crossfade interpolation is
+  imperceptible; vsync with interpolation drops the game to ~25fps.

@@ -1,0 +1,25 @@
+# 60fps. Binds the feature to the plugin in src/odt_60fps.cpp, which is
+# compiled into the runtime; no native code ships in this package.
+
+format_version = 7
+id = "odt.60fps"
+version = "0.1.0"
+name = "ODT 60fps"
+author = "Cyanoxide"
+description = "Draws in-between frames with the game's own code. Game speed unchanged."
+license = "MIT"
+resolver = "declarative"
+
+[[target]]
+game_id = "SLUS-00698"
+
+[[feature]]
+id = "fps60"
+name = "60fps"
+description = "Smoother motion from interpolated in-between frames."
+group = "Video"
+default_enabled = true
+
+[[plugin]]
+feature = "fps60"
+id = "odt.60fps"

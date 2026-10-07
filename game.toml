@@ -31,6 +31,9 @@ known_crc32 = [
 
 [recompiler]
 seeds = "seeds/ghidra_funcs.txt"
+# Hooks for src/odt_60fps.cpp. Changing these changes the codegen hash: regenerate.
+mod_instruction_sites = ["0x800932B8"]
+mod_function_entry_funcs = ["0x80093230", "0x8009617C", "0x8009105C"]
 out_dir = "generated"
 strict = true
 
