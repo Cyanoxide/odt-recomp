@@ -8,12 +8,6 @@
 
 ---
 
-<!-- coverage-progress -->
-<img src="docs/coverage.svg" alt="Native code coverage" width="100%">
-<!-- /coverage-progress -->
-
----
-
 <br>
 
 <!-- retcomm-readme-boxart -->
