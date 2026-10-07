@@ -49,6 +49,7 @@ psxrecomp_add_game_runtime(psx-runtime
     CODEGEN_SETUP_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/codegen_setup.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/odt_widescreen.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/odt_60fps.cpp"
 )
 
 # Stage runtime configs next to the exe for direct build/ launches. Only copy
